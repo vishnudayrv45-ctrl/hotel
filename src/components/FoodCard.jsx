@@ -1,11 +1,10 @@
 import { useRef, useState } from 'react'
 import { motion } from 'framer-motion'
-import { View } from '@react-three/drei'
-import { FoodView } from '../three/Stage'
 
 export default function FoodCard({ item, index, onOpen, onAdd }) {
   const ref = useRef()
-  const [hover, setHover] = useState(false)
+  const [imgOk, setImgOk] = useState(true)
+  const showPhoto = item.image && imgOk
 
   const move = (e) => {
     const r = ref.current.getBoundingClientRect()
@@ -18,7 +17,6 @@ export default function FoodCard({ item, index, onOpen, onAdd }) {
     s.setProperty('--my', `${y * 100}%`)
   }
   const leave = () => {
-    setHover(false)
     ref.current.style.setProperty('--rx', '0deg')
     ref.current.style.setProperty('--ry', '0deg')
   }
@@ -38,21 +36,29 @@ export default function FoodCard({ item, index, onOpen, onAdd }) {
         className="card"
         style={{ '--glow': item.accent }}
         onMouseMove={move}
-        onMouseEnter={() => setHover(true)}
         onMouseLeave={leave}
         onClick={() => onOpen(item)}
         role="button"
         tabIndex={0}
         onKeyDown={(e) => e.key === 'Enter' && onOpen(item)}
-        aria-label={`Open ${item.name} in 3D`}
+        aria-label={`Open ${item.name}`}
       >
         <div className="card-top">
           <span className="chip">{item.cat}</span>
           {item.veg && <span className="chip leaf">Veg</span>}
         </div>
-        <View className="card-view">
-          <FoodView item={item} hovered={hover} />
-        </View>
+
+        {showPhoto ? (
+          <div className="card-photo">
+            <img src={item.image} alt={item.name} loading="lazy" onError={() => setImgOk(false)} />
+          </div>
+        ) : (
+          <div className="card-photo ph">
+            <span className="ph-emoji">{item.emoji}</span>
+            <small>Photo coming soon</small>
+          </div>
+        )}
+
         <div className="card-body">
           <h3>{item.name}</h3>
           <p>{item.tagline}</p>
@@ -60,7 +66,7 @@ export default function FoodCard({ item, index, onOpen, onAdd }) {
             <strong>₹{item.price}</strong>
             <div className="card-actions">
               <button className="mini" onClick={(e) => { e.stopPropagation(); onAdd(item, 1) }} aria-label={`Add ${item.name}`}>+ Add</button>
-              <span className="view3d">View in 3D →</span>
+              <span className="view3d">View dish →</span>
             </div>
           </div>
         </div>

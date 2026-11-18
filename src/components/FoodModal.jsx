@@ -23,12 +23,19 @@ function ModalModel({ item, zoom }) {
 
 export default function FoodModal({ item, onClose, onNav, onAdd }) {
   const controls = useRef()
+  const [mode, setMode] = useState(item.image ? 'photo' : '3d')
   const [auto, setAuto] = useState(!REDUCED)
   const [zoom, setZoom] = useState(1)
   const [qty, setQty] = useState(1)
   const [added, setAdded] = useState(false)
 
-  useEffect(() => { setQty(1); setZoom(1); setAdded(false) }, [item.id])
+  useEffect(() => {
+    setQty(1)
+    setZoom(1)
+    setAdded(false)
+    setMode(item.image ? 'photo' : '3d')
+  }, [item.id, item.image])
+
   useEffect(() => {
     const k = (e) => {
       if (e.key === 'Escape') onClose()
@@ -54,33 +61,49 @@ export default function FoodModal({ item, onClose, onNav, onAdd }) {
         <button className="close" onClick={onClose} aria-label="Close">✕</button>
 
         <div className="stage">
-          <Canvas dpr={[1, 2]} camera={{ position: [0, 1.8, 6.8], fov: 35 }} gl={{ antialias: true, alpha: true }}>
-            <Suspense fallback={null}>
-              <Lights />
-              <StudioEnv />
-              <ModalModel key={item.id} item={item} zoom={zoom} />
-              <ContactShadows position={[0, -1.55, 0]} opacity={0.6} scale={9} blur={2.6} far={3.5} />
-              <OrbitControls
-                ref={controls}
-                enablePan={false}
-                enableDamping
-                dampingFactor={0.08}
-                minDistance={3.5}
-                maxDistance={11}
-                autoRotate={auto}
-                autoRotateSpeed={2.4}
-                maxPolarAngle={Math.PI * 0.62}
-              />
-            </Suspense>
-          </Canvas>
-          <div className="hint">Drag to rotate · Scroll or pinch to zoom</div>
-          <div className="tools">
-            <button className={auto ? 'on' : ''} onClick={() => setAuto(!auto)}>{auto ? '❚❚ Auto-rotate' : '▶ Auto-rotate'}</button>
-            <button onClick={() => setZoom((z) => clamp(z - 0.2))} aria-label="Zoom out">−</button>
-            <span className="zoomval">{Math.round(zoom * 100)}%</span>
-            <button onClick={() => setZoom((z) => clamp(z + 0.2))} aria-label="Zoom in">+</button>
-            <button onClick={reset}>Reset</button>
-          </div>
+          {item.image && (
+            <div className="mode-switch">
+              <button className={mode === 'photo' ? 'on' : ''} onClick={() => setMode('photo')}>Photo</button>
+              <button className={mode === '3d' ? 'on' : ''} onClick={() => setMode('3d')}>3D</button>
+            </div>
+          )}
+
+          {mode === '3d' ? (
+            <>
+              <Canvas dpr={[1, 2]} camera={{ position: [0, 1.8, 6.8], fov: 35 }} gl={{ antialias: true, alpha: true }}>
+                <Suspense fallback={null}>
+                  <Lights />
+                  <StudioEnv />
+                  <ModalModel key={item.id} item={item} zoom={zoom} />
+                  <ContactShadows position={[0, -1.55, 0]} opacity={0.6} scale={9} blur={2.6} far={3.5} />
+                  <OrbitControls
+                    ref={controls}
+                    enablePan={false}
+                    enableDamping
+                    dampingFactor={0.08}
+                    minDistance={3.5}
+                    maxDistance={11}
+                    autoRotate={auto}
+                    autoRotateSpeed={2.4}
+                    maxPolarAngle={Math.PI * 0.62}
+                  />
+                </Suspense>
+              </Canvas>
+              <div className="hint">Drag to rotate · Scroll or pinch to zoom</div>
+              <div className="tools">
+                <button className={auto ? 'on' : ''} onClick={() => setAuto(!auto)}>{auto ? '❚❚ Auto-rotate' : '▶ Auto-rotate'}</button>
+                <button onClick={() => setZoom((z) => clamp(z - 0.2))} aria-label="Zoom out">−</button>
+                <span className="zoomval">{Math.round(zoom * 100)}%</span>
+                <button onClick={() => setZoom((z) => clamp(z + 0.2))} aria-label="Zoom in">+</button>
+                <button onClick={reset}>Reset</button>
+              </div>
+            </>
+          ) : (
+            <div className="stage-photo">
+              <img src={item.image} alt={item.name} onError={() => setMode('3d')} />
+            </div>
+          )}
+
           <button className="nav-arrow prev" onClick={() => onNav(-1)} aria-label="Previous dish">‹</button>
           <button className="nav-arrow next" onClick={() => onNav(1)} aria-label="Next dish">›</button>
         </div>

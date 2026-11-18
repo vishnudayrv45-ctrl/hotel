@@ -1,7 +1,7 @@
 import { Logo } from './Nav'
 import { scrollToId } from '../lib/smooth'
 
-export default function Footer({ notify }) {
+export default function Footer({ notify, onAdmin }) {
   const demo = () => notify('Demo link — frontend only')
   return (
     <footer className="footer">
@@ -18,8 +18,11 @@ export default function Footer({ notify }) {
       </div>
       <div className="foot-big" aria-hidden="true">AURUM</div>
       <div className="foot-bot">
-        <span>© 2026 Aurum Fire &amp; Spice Kitchen — a frontend demo with sample data.</span>
-        <button onClick={() => scrollToId('top')}>Back to top ↑</button>
+        <span>© 2026 Aurum Fire &amp; Spice Kitchen — a practice project with sample data.</span>
+        <span className="foot-links">
+          <button onClick={onAdmin}>Admin</button>
+          <button onClick={() => scrollToId('top')}>Back to top ↑</button>
+        </span>
       </div>
     </footer>
   )

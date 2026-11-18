@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { View } from '@react-three/drei'
 import { AnimatePresence, motion } from 'framer-motion'
-import { MENU, byId } from './data/menu'
+import { useStore } from './context/StoreContext'
 import { initSmooth, stopScroll, startScroll } from './lib/smooth'
 import { setupScroll } from './lib/scrollFx'
 import { ScrollTrigger } from './lib/gsap'
@@ -15,14 +15,20 @@ import Story from './components/Story'
 import Signature from './components/Signature'
 import Gallery from './components/Gallery'
 import Reserve from './components/Reserve'
+import Contact from './components/Contact'
 import Footer from './components/Footer'
 import FoodModal from './components/FoodModal'
 import CartDrawer from './components/CartDrawer'
+import Admin from './components/Admin'
 
 export default function App() {
+  const {
+    menu, lines, count, subtotal,
+    addToCart, setQty, removeFromCart, placeOrder,
+    isAdminOpen, setIsAdminOpen,
+  } = useStore()
   const [ready, setReady] = useState(false)
   const [active, setActive] = useState(null)
-  const [cart, setCart] = useState({})
   const [cartOpen, setCartOpen] = useState(false)
   const [toast, setToast] = useState('')
   const timer = useRef()
@@ -38,35 +44,44 @@ export default function App() {
   useEffect(() => {
     if (!ready) return
     const mm = setupScroll()
-    const t = setTimeout(() => ScrollTrigger.refresh(), 400)
-    return () => { clearTimeout(t); mm.revert() }
+    return () => mm.revert()
   }, [ready])
+
+  // page height can change (menu edits), so refresh scroll positions
+  useEffect(() => {
+    if (!ready || isAdminOpen) return
+    const t = setTimeout(() => ScrollTrigger.refresh(), 400)
+    return () => clearTimeout(t)
+  }, [ready, isAdminOpen, menu.length])
 
   // lock page scroll while an overlay is open
   useEffect(() => {
-    const lock = !!active || cartOpen || !ready
+    const lock = !!active || cartOpen || isAdminOpen || !ready
     lock ? stopScroll() : startScroll()
     document.body.style.overflow = lock ? 'hidden' : ''
-  }, [active, cartOpen, ready])
+  }, [active, cartOpen, isAdminOpen, ready])
 
   const add = (item, qty = 1) => {
-    setCart((c) => ({ ...c, [item.id]: (c[item.id] || 0) + qty }))
+    addToCart(item, qty)
     notify(`${item.name} added to your order`)
   }
-  const setQty = (id, q) => setCart((c) => {
-    const n = { ...c }
-    if (q <= 0) delete n[id]; else n[id] = q
-    return n
-  })
-  const count = Object.values(cart).reduce((a, b) => a + b, 0)
-  const place = () => { setCart({}); setCartOpen(false); notify('Order placed ✦ Your table is being prepared (demo)') }
-  const nav = useCallback((d) => {
-    setActive((a) => {
-      if (!a) return a
-      const i = MENU.findIndex((m) => m.id === a.id)
-      return MENU[(i + d + MENU.length) % MENU.length]
-    })
-  }, [])
+
+  const place = (name) => {
+    const order = placeOrder(name)
+    setCartOpen(false)
+    notify(`Order ${order.id} placed ✦ (demo)`)
+  }
+
+  const nav = useCallback(
+    (d) =>
+      setActive((a) => {
+        if (!a) return a
+        const i = menu.findIndex((m) => m.id === a.id)
+        if (i === -1) return a
+        return menu[(i + d + menu.length) % menu.length]
+      }),
+    [menu]
+  )
 
   return (
     <>
@@ -81,10 +96,11 @@ export default function App() {
         <Signature onOpen={setActive} onAdd={add} />
         <Gallery />
         <Reserve notify={notify} />
+        <Contact notify={notify} />
       </main>
-      <Footer notify={notify} />
+      <Footer notify={notify} onAdmin={() => setIsAdminOpen(true)} />
 
-      {/* One shared canvas renders every small 3D preview (cards + signature dishes) */}
+      {/* One shared canvas renders the small 3D previews */}
       <Canvas className="global-canvas" dpr={[1, 1.5]} gl={{ antialias: true, alpha: true }}>
         <View.Port />
       </Canvas>
@@ -92,11 +108,24 @@ export default function App() {
       <AnimatePresence>
         {active && <FoodModal key="modal" item={active} onClose={() => setActive(null)} onNav={nav} onAdd={add} />}
       </AnimatePresence>
-      <CartDrawer open={cartOpen} cart={cart} onClose={() => setCartOpen(false)} onQty={setQty} onPlace={place} />
+
+      <CartDrawer
+        open={cartOpen}
+        lines={lines}
+        subtotal={subtotal}
+        onClose={() => setCartOpen(false)}
+        onQty={setQty}
+        onRemove={removeFromCart}
+        onPlace={place}
+      />
+
+      {isAdminOpen && <Admin onClose={() => setIsAdminOpen(false)} notify={notify} />}
 
       <AnimatePresence>
         {toast && (
-          <motion.div className="toast" initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 20, opacity: 0 }}>{toast}</motion.div>
+          <motion.div className="toast" initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 20, opacity: 0 }}>
+            {toast}
+          </motion.div>
         )}
       </AnimatePresence>
     </>

@@ -1,8 +1,16 @@
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { scrollToId } from '../lib/smooth'
+import { useStore } from '../context/StoreContext'
 
-const LINKS = [['menu', 'Menu'], ['story', 'Story'], ['signature', 'Signature'], ['gallery', 'Gallery'], ['reserve', 'Reserve']]
+const LINKS = [
+  ['menu', 'Menu'],
+  ['story', 'Story'],
+  ['signature', 'Signature'],
+  ['gallery', 'Gallery'],
+  ['reserve', 'Reserve'],
+  ['contact', 'Contact'],
+]
 
 export function Logo() {
   return (
@@ -17,38 +25,93 @@ export function Logo() {
 }
 
 export default function Nav({ count, onCart }) {
+  const store = useStore()
+  const displayCount = count !== undefined ? count : store?.cartCount || 0
+  const handleOpenAdmin = () => store?.setIsAdminOpen(true)
+
   const [open, setOpen] = useState(false)
   const [solid, setSolid] = useState(false)
+
   useEffect(() => {
     const f = () => setSolid(window.scrollY > 60)
     f()
     window.addEventListener('scroll', f, { passive: true })
     return () => window.removeEventListener('scroll', f)
   }, [])
+
   const go = (id) => {
     setOpen(false)
     setTimeout(() => scrollToId(id), open ? 450 : 0)
   }
+
   return (
     <>
-      <motion.header className={`nav ${solid ? 'solid' : ''}`} initial={{ y: -80, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 3, duration: 1, ease: [0.2, 0.8, 0.2, 1] }}>
+      <motion.header
+        className={`nav ${solid ? 'solid' : ''}`}
+        initial={{ y: -80, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ delay: 3, duration: 1, ease: [0.2, 0.8, 0.2, 1] }}
+      >
         <Logo />
         <nav className="nav-links">
-          {LINKS.map(([id, l]) => <button key={id} onClick={() => go(id)}>{l}</button>)}
+          {LINKS.map(([id, l]) => (
+            <button key={id} onClick={() => go(id)}>{l}</button>
+          ))}
         </nav>
         <div className="nav-right">
-          <button className="cart-btn" onClick={onCart} aria-label="Open order">
-            Order <span key={count} className="badge">{count}</span>
+          <button
+            className="admin-nav-btn"
+            onClick={handleOpenAdmin}
+            title="Open Aurum Staff Console"
+            aria-label="Staff Console"
+          >
+            Staff
           </button>
-          <button className={`burger ${open ? 'open' : ''}`} onClick={() => setOpen(!open)} aria-label="Menu"><i /><i /></button>
+          <button className="cart-btn" onClick={onCart} aria-label="Open order">
+            Order <span key={displayCount} className="badge">{displayCount}</span>
+          </button>
+          <button
+            className={`burger ${open ? 'open' : ''}`}
+            onClick={() => setOpen(!open)}
+            aria-label="Menu"
+          >
+            <i /><i />
+          </button>
         </div>
       </motion.header>
+
       <AnimatePresence>
         {open && (
-          <motion.div className="mobile-menu" initial={{ clipPath: 'circle(0% at 92% 4%)' }} animate={{ clipPath: 'circle(150% at 92% 4%)' }} exit={{ clipPath: 'circle(0% at 92% 4%)' }} transition={{ duration: 0.7, ease: [0.76, 0, 0.24, 1] }}>
+          <motion.div
+            className="mobile-menu"
+            initial={{ clipPath: 'circle(0% at 92% 4%)' }}
+            animate={{ clipPath: 'circle(150% at 92% 4%)' }}
+            exit={{ clipPath: 'circle(0% at 92% 4%)' }}
+            transition={{ duration: 0.7, ease: [0.76, 0, 0.24, 1] }}
+          >
             {LINKS.map(([id, l], i) => (
-              <motion.button key={id} onClick={() => go(id)} initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.25 + i * 0.07 }}>{l}</motion.button>
+              <motion.button
+                key={id}
+                onClick={() => go(id)}
+                initial={{ y: 40, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ delay: 0.25 + i * 0.07 }}
+              >
+                {l}
+              </motion.button>
             ))}
+            <motion.button
+              className="mobile-admin-btn"
+              onClick={() => {
+                setOpen(false)
+                handleOpenAdmin()
+              }}
+              initial={{ y: 40, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.25 + LINKS.length * 0.07 }}
+            >
+              Staff Console ✦
+            </motion.button>
           </motion.div>
         )}
       </AnimatePresence>
