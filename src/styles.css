@@ -527,3 +527,6 @@ input,select,textarea{background:rgba(24,48,36,.55)}
 .drawer{background:#183024}
 .admin{background:#183024}
 .admin-bar{background:rgba(24,48,36,.95)}
+.photo-up{display:grid;gap:10px}
+.photo-up img{width:120px;height:120px;object-fit:cover;border-radius:14px;border:1px solid var(--line)}
+.photo-up small{color:var(--muted)}

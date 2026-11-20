@@ -1,12 +1,12 @@
 import { Router } from 'express'
-import { read, write, uid, nowText } from '../data/db/store.js'
+import { read, write, uid, nowText } from '../db/store.js'
 import { adminAuth } from '../middleware/adminAuth.js'
 
 const router = Router()
 
-// PUBLIC: contact form. Body: { name, email, message }
+// PUBLIC: contact form. Body: { name, email, message, phone?, subject? }
 router.post('/', (req, res) => {
-  const { name = '', email = '', message = '' } = req.body || {}
+  const { name = '', email = '', message = '', phone = '', subject = '' } = req.body || {}
   if (String(name).trim().length < 2) return res.status(400).json({ error: 'Please enter your name' })
   if (!/^\S+@\S+\.\S+$/.test(email)) return res.status(400).json({ error: 'Please enter a valid email' })
   if (String(message).trim().length < 10) return res.status(400).json({ error: 'Message should be at least 10 characters' })
@@ -15,6 +15,8 @@ router.post('/', (req, res) => {
     id: uid('MSG-'),
     name: String(name).trim().slice(0, 60),
     email: String(email).trim().slice(0, 100),
+    phone: String(phone).trim().slice(0, 30),
+    subject: String(subject).trim().slice(0, 80),
     message: String(message).trim().slice(0, 1000),
     date: nowText(),
   }

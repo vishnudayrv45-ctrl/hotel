@@ -1,31 +1,54 @@
-import { createContext, useContext, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { usePersistent } from '../lib/storage'
 import { MENU, CATEGORIES } from '../data/menu'
-import { SAMPLE_ORDERS, SAMPLE_RESERVATIONS, SAMPLE_MESSAGES } from '../data/samples'
+import { api, getToken, setToken } from '../services/api'
 
 const Ctx = createContext(null)
 export const useStore = () => useContext(Ctx)
 
-// category -> 3D model type, default colour and emoji for newly added dishes
-const KIND = { Burgers: 'burger', Pizzas: 'pizza', Biryani: 'biryani', Pasta: 'pasta', Desserts: 'dessert', Beverages: 'beverage' }
-const TONE = { burger: '#f2b53d', pizza: '#c0392b', biryani: '#f3dfa6', pasta: '#f1d27a', dessert: '#2a140c', beverage: '#f4a640' }
-const EMOJI = { Burgers: '🍔', Pizzas: '🍕', Biryani: '🍛', Pasta: '🍝', Desserts: '🍰', Beverages: '🍹' }
-
-const uid = (prefix) => prefix + Math.random().toString(36).slice(2, 7).toUpperCase()
-const now = () => new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })
-
 export function StoreProvider({ children }) {
-  const [menu, setMenu] = usePersistent('aurum_menu_v2', MENU)
-  const [cart, setCart] = usePersistent('aurum_cart', {})
-  const [reservations, setReservations] = usePersistent('aurum_reservations', SAMPLE_RESERVATIONS)
-  const [orders, setOrders] = usePersistent('aurum_orders', SAMPLE_ORDERS)
-  const [messages, setMessages] = usePersistent('aurum_messages', SAMPLE_MESSAGES)
+  // starts with the local sample menu, then replaced by the server's menu
+  const [menu, setMenu] = useState(MENU)
+  const [serverOnline, setServerOnline] = useState(false)
+  const [cart, setCart] = usePersistent('aurum_cart', {}) // cart stays in the browser
+  const [orders, setOrders] = useState([])
+  const [reservations, setReservations] = useState([])
+  const [messages, setMessages] = useState([])
   const [isAdminOpen, setIsAdminOpen] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(!!getToken())
 
   const categories = CATEGORIES
   const getDish = (id) => menu.find((m) => m.id === id)
 
-  // cart lines = cart ids matched to menu items (deleted dishes drop out automatically)
+  /* ---- load data from the server ---- */
+  const loadMenu = useCallback(async () => {
+    try {
+      const list = await api.getMenu()
+      setMenu(list)
+      setServerOnline(true)
+    } catch {
+      setServerOnline(false) // keep the local sample menu
+    }
+  }, [])
+
+  useEffect(() => { loadMenu() }, [loadMenu])
+
+  const loadAdminData = useCallback(async () => {
+    try {
+      const [o, r, m] = await Promise.all([api.getOrders(), api.getReservations(), api.getMessages()])
+      setOrders(o)
+      setReservations(r)
+      setMessages(m)
+    } catch {
+      if (!getToken()) setIsAdmin(false) // login expired
+    }
+  }, [])
+
+  const refresh = useCallback(async () => {
+    await Promise.all([loadMenu(), loadAdminData()])
+  }, [loadMenu, loadAdminData])
+
+  /* ---- cart (browser only) ---- */
   const lines = useMemo(
     () => Object.entries(cart).map(([id, qty]) => ({ item: menu.find((m) => m.id === id), qty })).filter((l) => l.item),
     [cart, menu]
@@ -33,7 +56,6 @@ export function StoreProvider({ children }) {
   const count = lines.reduce((sum, l) => sum + l.qty, 0)
   const subtotal = lines.reduce((sum, l) => sum + l.item.price * l.qty, 0)
 
-  /* ---- cart ---- */
   const addToCart = (item, qty = 1) => setCart((c) => ({ ...c, [item.id]: Math.min(50, (c[item.id] || 0) + qty) }))
   const setQty = (id, q) =>
     setCart((c) => {
@@ -44,71 +66,74 @@ export function StoreProvider({ children }) {
     })
   const removeFromCart = (id) => setQty(id, 0)
 
-  const placeOrder = (customer = '') => {
-    const gst = Math.round(subtotal * 0.05)
-    const order = {
-      id: uid('ORD-'),
-      customer: customer.trim() || 'Guest',
-      date: now(),
-      items: lines.map((l) => ({ name: l.item.name, qty: l.qty, price: l.item.price })),
-      total: subtotal + gst,
-      status: 'New',
-    }
-    setOrders((o) => [order, ...o])
+  /* ---- customer actions (sent to the server) ---- */
+  const placeOrder = async (customer = '') => {
+    const order = await api.createOrder({
+      customer,
+      items: lines.map((l) => ({ id: l.item.id, qty: l.qty })),
+    })
     setCart({})
     return order
   }
+  const addReservation = (r) => api.createReservation(r)
+  const addMessage = (m) => api.sendMessage(m)
 
-  /* ---- reservations & contact ---- */
-  const addReservation = (r) => {
-    const booking = { ...r, id: uid('AUR-'), status: 'Pending' }
-    setReservations((list) => [booking, ...list])
-    return booking
+  /* ---- admin ---- */
+  const adminLogin = async (pin) => {
+    const { token } = await api.login(pin)
+    setToken(token)
+    setIsAdmin(true)
   }
-  const addMessage = (m) => setMessages((list) => [{ ...m, id: uid('MSG-'), date: now() }, ...list])
-
-  /* ---- admin: menu ---- */
-  const saveItem = (d) => {
-    const kind = KIND[d.cat]
-    if (menu.some((m) => m.id === d.id)) {
-      setMenu((list) =>
-        list.map((x) => (x.id === d.id ? { ...x, ...d, kind, tone: x.cat === d.cat ? x.tone : TONE[kind] } : x))
-      )
-    } else {
-      const item = { tone: TONE[kind], accent: '#d9a548', emoji: EMOJI[d.cat], ...d, kind, id: uid('item-').toLowerCase() }
-      setMenu((list) => [...list, item])
-    }
-  }
-  const deleteItem = (id) => {
-    setMenu((list) => list.filter((m) => m.id !== id))
-    setCart((c) => {
-      const next = { ...c }
-      delete next[id]
-      return next
-    })
+  const adminLogout = async () => {
+    try { await api.logout() } catch { /* ignore */ }
+    setToken('')
+    setIsAdmin(false)
+    setOrders([]); setReservations([]); setMessages([])
   }
 
-  /* ---- admin: orders / reservations / messages ---- */
-  const updateOrder = (id, status) => setOrders((l) => l.map((o) => (o.id === id ? { ...o, status } : o)))
-  const deleteOrder = (id) => setOrders((l) => l.filter((o) => o.id !== id))
-  const updateReservation = (id, status) => setReservations((l) => l.map((r) => (r.id === id ? { ...r, status } : r)))
-  const deleteReservation = (id) => setReservations((l) => l.filter((r) => r.id !== id))
-  const deleteMessage = (id) => setMessages((l) => l.filter((m) => m.id !== id))
+  const saveItem = async (d) => {
+    if (d.id) await api.updateDish(d.id, d)
+    else await api.addDish(d)
+    await loadMenu()
+  }
+  const deleteItem = async (id) => {
+    await api.deleteDish(id)
+    setCart((c) => { const n = { ...c }; delete n[id]; return n })
+    await loadMenu()
+  }
+  const uploadPhoto = async (file) => (await api.uploadPhoto(file)).url
 
-  const resetDemo = () => {
-    setMenu(MENU); setCart({}); setOrders(SAMPLE_ORDERS); setReservations(SAMPLE_RESERVATIONS); setMessages(SAMPLE_MESSAGES)
+  const updateOrder = async (id, status) => {
+    await api.setOrderStatus(id, status)
+    setOrders((l) => l.map((o) => (o.id === id ? { ...o, status } : o)))
+  }
+  const deleteOrder = async (id) => {
+    await api.deleteOrder(id)
+    setOrders((l) => l.filter((o) => o.id !== id))
+  }
+  const updateReservation = async (id, status) => {
+    await api.setReservationStatus(id, status)
+    setReservations((l) => l.map((r) => (r.id === id ? { ...r, status } : r)))
+  }
+  const deleteReservation = async (id) => {
+    await api.deleteReservation(id)
+    setReservations((l) => l.filter((r) => r.id !== id))
+  }
+  const deleteMessage = async (id) => {
+    await api.deleteMessage(id)
+    setMessages((l) => l.filter((m) => m.id !== id))
   }
 
   const value = {
     menu, categories, getDish,
     lines, count, cartCount: count, subtotal,
     orders, reservations, messages,
-    isAdminOpen, setIsAdminOpen,
+    serverOnline, isAdmin, isAdminOpen, setIsAdminOpen,
     addToCart, setQty, removeFromCart, placeOrder,
     addReservation, addMessage,
-    saveItem, deleteItem,
+    adminLogin, adminLogout, refresh,
+    saveItem, deleteItem, uploadPhoto,
     updateOrder, deleteOrder, updateReservation, deleteReservation, deleteMessage,
-    resetDemo,
   }
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
 }

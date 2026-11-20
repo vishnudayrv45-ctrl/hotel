@@ -4,6 +4,7 @@ import { OrbitControls, ContactShadows, Float } from '@react-three/drei'
 import { AnimatePresence, motion } from 'framer-motion'
 import * as THREE from 'three'
 import { FoodModel, FIT } from '../three/Foods'
+import PhotoModel, { useImageOk } from './PhotoModel'
 import { Lights, StudioEnv, REDUCED } from '../three/Stage'
 
 function ModalModel({ item, zoom }) {
@@ -23,17 +24,18 @@ function ModalModel({ item, zoom }) {
 
 export default function FoodModal({ item, onClose, onNav, onAdd }) {
   const controls = useRef()
-  const [mode, setMode] = useState(item.image ? 'photo' : '3d')
+  const [mode, setMode] = useState('3d')
   const [auto, setAuto] = useState(!REDUCED)
   const [zoom, setZoom] = useState(1)
   const [qty, setQty] = useState(1)
   const [added, setAdded] = useState(false)
+  const photoOk = useImageOk(item.image)
 
   useEffect(() => {
     setQty(1)
     setZoom(1)
     setAdded(false)
-    setMode(item.image ? 'photo' : '3d')
+    setMode('3d')
   }, [item.id, item.image])
 
   useEffect(() => {
@@ -74,7 +76,11 @@ export default function FoodModal({ item, onClose, onNav, onAdd }) {
                 <Suspense fallback={null}>
                   <Lights />
                   <StudioEnv />
-                  <ModalModel key={item.id} item={item} zoom={zoom} />
+                  {photoOk === null ? null : photoOk ? (
+                    <PhotoModel key={item.id} src={item.image} kind={item.kind} zoom={zoom} />
+                  ) : (
+                    <ModalModel key={item.id} item={item} zoom={zoom} />
+                  )}
                   <ContactShadows position={[0, -1.55, 0]} opacity={0.6} scale={9} blur={2.6} far={3.5} />
                   <OrbitControls
                     ref={controls}
@@ -85,7 +91,6 @@ export default function FoodModal({ item, onClose, onNav, onAdd }) {
                     maxDistance={11}
                     autoRotate={auto}
                     autoRotateSpeed={2.4}
-                    maxPolarAngle={Math.PI * 0.62}
                   />
                 </Suspense>
               </Canvas>
