@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { read, write, uid, nowText } from '../db/store.js'
+import { read, write, uid, nowText } from '../data/db/store.js'
 import { adminAuth } from '../middleware/adminAuth.js'
 
 const router = Router()
@@ -28,6 +28,8 @@ router.post('/', (req, res) => {
 
 // ADMIN: list
 router.get('/', adminAuth, (req, res) => res.json(read('messages')))
+    
+
 
 // ADMIN: delete
 router.delete('/:id', adminAuth, (req, res) => {
